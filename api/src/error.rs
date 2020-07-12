@@ -68,17 +68,34 @@ pub enum ResponseError {
     OpenIdError(#[cause] OpenIdError),
 }
 
+impl ResponseError {
+    fn log(&self) {
+        match self {
+            // Log all server error types
+            Self::R2d2Error(_)
+            | Self::DieselError(_)
+            | Self::OpenIdClientError(_)
+            | Self::OpenIdError(_) => {
+                error!("{}", self);
+                dbg!(self.backtrace());
+                if let Some(bt) = self.backtrace() {
+                    error!("{}", bt);
+                }
+            }
+            // All other error types are client errors, don't log them
+            _ => {}
+        }
+    }
+}
+
 impl From<r2d2::Error> for ResponseError {
     fn from(other: r2d2::Error) -> Self {
-        error!("{}", other); // we want to log all these errors
         Self::R2d2Error(other)
     }
 }
 
 impl From<diesel::result::Error> for ResponseError {
     fn from(other: diesel::result::Error) -> Self {
-        // every DB error that gets shown to the user should get logged
-        error!("{}", other);
         Self::DieselError(other)
     }
 }
@@ -104,6 +121,7 @@ impl From<OpenIdError> for ResponseError {
 // Juniper error
 impl IntoFieldError for ResponseError {
     fn into_field_error(self) -> FieldError {
+        self.log();
         match self {
             ResponseError::ValidationErrors(errors) => {
                 validation_to_field_error(errors)
@@ -116,6 +134,7 @@ impl IntoFieldError for ResponseError {
 // Actix error
 impl actix_web::ResponseError for ResponseError {
     fn error_response(&self) -> HttpResponse {
+        self.log();
         match self {
             // 401
             Self::InvalidCredentials => HttpResponse::Unauthorized().into(),

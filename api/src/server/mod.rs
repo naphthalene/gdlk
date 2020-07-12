@@ -84,6 +84,7 @@ async fn route_graphql(
         Ok::<_, serde_json::error::Error>(serde_json::to_string(&res)?)
     })
     .await?;
+    Err(diesel::result::Error::NotFound).map_err(ResponseError::from)?;
     Ok(HttpResponse::Ok()
         .content_type("application/json")
         .body(response))
