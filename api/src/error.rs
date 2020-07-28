@@ -38,10 +38,20 @@ pub enum ResponseError {
     NoUpdate,
 
     /// Action cannot be performed because the user is not authenticated.
+    /// Equivalent of an HTTP 401.
+    /// TODO: Maybe we want to remove this and just use PermissionDenied?
     #[fail(display = "Not logged in")]
     Unauthenticated,
 
-    /// User submitted invalid/incorrect credentials for auth
+    /// Action cannot be performed because the user doesn't have permission to
+    /// do so. This should only be used when the user is already logged in.
+    /// Equivalent of an HTTP 403.
+    #[fail(display = "Insufficient permissions to perform this action")]
+    PermissionDenied,
+
+    /// User submitted invalid/incorrect credentials for auth. This should only
+    /// be used in response to requests to authenticate. It is **not** a
+    /// general purpose "not logged in". For that, use [Self::Unauthenticated].
     #[fail(display = "Invalid credentials")]
     InvalidCredentials,
 
@@ -118,7 +128,11 @@ impl actix_web::ResponseError for ResponseError {
     fn error_response(&self) -> HttpResponse {
         match self {
             // 401
-            Self::InvalidCredentials => HttpResponse::Unauthorized().into(),
+            Self::Unauthenticated | Self::InvalidCredentials => {
+                HttpResponse::Unauthorized().into()
+            }
+            // 403
+            Self::PermissionDenied => HttpResponse::Forbidden().into(),
             // 409
             Self::AlreadyExists => HttpResponse::Conflict().into(),
             // Everything else becomes a 500
